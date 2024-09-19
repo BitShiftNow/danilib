@@ -7,7 +7,7 @@ If a file has any other dependencies they will be listed in the comment section 
 
 ## Platforms
 
-All these files are specifically written for the `Microsoft (R) C/C++ Optimizing Compiler Version 19.38.33134 for x64` and have only been tested on `Windows 11 Home 64-bit - 23H2 - 22631.4169`. 
+All these files are specifically written for the `Microsoft (R) C/C++ Optimizing Compiler Version 19.38.33135 for x64` and have only been tested on `Windows 11 Home 64-bit - 23H2 - 22631.4169`. 
 
 
 ## How to use
