@@ -21,7 +21,7 @@ The following libraries are available:
 
 | Library | Description |
 | ------------- | ------------- |
-| dani_base.h | Contains base types and helper macros that is used by all other library files. |
+| dani_base.h | Contains base types and helper macros that are used by all other library files. |
 
 
 ## License
