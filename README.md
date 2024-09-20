@@ -22,6 +22,7 @@ The following libraries are available:
 | Library | Description |
 | ------------- | ------------- |
 | dani_base.h | Contains base types and helper macros that are used by all other library files. |
+| dani_profiler.h | Contains functionality to collect profiling information based on rdtsc. |
 
 
 ## License
