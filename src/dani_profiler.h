@@ -3,7 +3,7 @@
 //
 // Author: Dani Drywa (dani@drywa.me)
 //
-// Last change: 2024/09/20 (yyyy/mm/dd)
+// Last change: 2024/09/22 (yyyy/mm/dd)
 //
 // License: See end of file
 //
@@ -13,6 +13,7 @@
 // Intrin.h - for __rdtsc, __rdtscp, and __faststorefence
 //
 // Notes:
+// This library is *NOT* thread safe. If you are in need of profiling across multiple threads you have to make this code thread safe or you might want to consider using a different library better suited for your needs.
 // All dependencies must be included before including this file.
 // To include the implementation specify DANI_LIB_PROFILER_IMPLEMENTATION before including this file.
 // To use static versions of the functions specify DANI_PROFILER_STATIC before including this file.
@@ -26,7 +27,8 @@
 // Restarting profiling after calling dani_EndProfiling() will give invalid results. Consider a profiling runtime to also be the program runtime.
 // To time multiple statements of code use dani_BeginProfilingZone() and dani_EndProfilingZone() like so:
 // 
-// dani_profiler_zone my_zone = dani_BeginProfilingZone("Zone Name", 0); // The 0 is the index. Each new zone needs a different index. The maximum index depends on DANI_PROFILER_ENTRIES_MAX.
+// u32 index = GetNextEntryIndex(); // The maximum valid index depends on DANI_PROFILER_ENTRIES_MAX.
+// dani_profiler_zone my_zone = dani_BeginProfilingZone("Zone Name", index); 
 // // Add your code you want to profile here
 // dani_EndProfilingZone(my_zone);
 //
@@ -93,11 +95,16 @@ __DANI_PROFILER_DEC void dani_BeginProfiling(void);
 __DANI_PROFILER_DEC void dani_EndProfiling(void);
 __DANI_PROFILER_DEC void dani_PrintProfilingResults(void);
 
+__DANI_PROFILER_DEC u32 GetNextEntryIndex(void);
 __DANI_PROFILER_DEC dani_profiler_zone dani_BeginProfilingZone(const s8 *name, u32 index);
 __DANI_PROFILER_DEC void dani_EndProfilingZone(dani_profiler_zone zone);
 
 #define dani_Profile(var_name, zone_name, profile_block) Statement({\
-    dani_profiler_zone var_name = dani_BeginProfilingZone(zone_name, __COUNTER__);\
+    static u32 StringifyCombine(var_name,entry_index) = 0;\
+    if (StringifyCombine(var_name,entry_index) == 0) {\
+        StringifyCombine(var_name,entry_index) = GetNextEntryIndex();\
+    }\
+    dani_profiler_zone var_name = dani_BeginProfilingZone(zone_name, StringifyCombine(var_name,entry_index));\
     profile_block\
     dani_EndProfilingZone(var_name);\
     })
@@ -108,7 +115,7 @@ __DANI_PROFILER_DEC void dani_EndProfilingZone(dani_profiler_zone zone);
 
 #ifdef DANI_LIB_PROFILER_IMPLEMENTATION
 
-static struct DANI_PROFILER g_profiler = {0};
+static struct DANI_PROFILER g_dani_profiler = {0};
 
 static u64 ReadOSTimer(void) {
     LARGE_INTEGER timer;
@@ -169,11 +176,11 @@ __DANI_PROFILER_DEF void dani_BeginProfiling(void) {
     ReadEndCPUTimer();
 
     // Start profiler
-    g_profiler.start_ticks = ReadStartCPUTimer();
+    g_dani_profiler.start_ticks = ReadStartCPUTimer();
 }
 
 __DANI_PROFILER_DEF void dani_EndProfiling(void) {
-    g_profiler.end_ticks = ReadEndCPUTimer();
+    g_dani_profiler.end_ticks = ReadEndCPUTimer();
 }
 
 static void PrintProfilingTimes(u64 elapsed_ticks, u64 cpu_frequency) {
@@ -219,7 +226,7 @@ static void PrintCPUFrequency(f64 cpu_frequency) {
 
 __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
     u64 cpu_frequency = ReadCPUTimerFrequency(100);
-    u64 elapsed_ticks = g_profiler.end_ticks - g_profiler.start_ticks;
+    u64 elapsed_ticks = g_dani_profiler.end_ticks - g_dani_profiler.start_ticks;
 
     if (cpu_frequency) {
         DANI_PROFILER_PRINTF("Total time: ");
@@ -228,8 +235,8 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
         PrintCPUFrequency((f64)cpu_frequency);
         DANI_PROFILER_PRINTF("\n\n");
 
-        for (u32 entry_index = 0; entry_index < ArrayCount(g_profiler.entries); entry_index += 1) {
-            dani_profiler_entry *entry = &g_profiler.entries[entry_index];
+        for (u32 entry_index = 0; entry_index < ArrayCount(g_dani_profiler.entries); entry_index += 1) {
+            dani_profiler_entry *entry = &g_dani_profiler.entries[entry_index];
             if (entry->elapsed_ticks) {
                 f64 percentage = ((f64)entry->elapsed_ticks / (f64)elapsed_ticks) * 100.0;
                 DANI_PROFILER_PRINTF("  %s[Hits: %llu, Percentage: %0.2f%%] Total time: ", entry->name, entry->hit_counter, percentage);
@@ -249,6 +256,14 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
     }
 }
 
+static volatile s32 g_dani_profiler_entry_index_conter = 0;
+
+__DANI_PROFILER_DEF u32 GetNextEntryIndex(void) {
+    u32 result = (u32)_InterlockedIncrement((volatile long *)&g_dani_profiler_entry_index_conter);
+    Assert(result != 0 && result < DANI_PROFILER_ENTRIES_MAX);
+    return (result);
+}
+
 __DANI_PROFILER_DEF dani_profiler_zone dani_BeginProfilingZone(const s8 *name, u32 index) {
     dani_profiler_zone result = {0};
 
@@ -263,7 +278,7 @@ __DANI_PROFILER_DEF void dani_EndProfilingZone(dani_profiler_zone zone) {
     u64 end_ticks = ReadEndCPUTimer();
     u64 elapsed_ticks = end_ticks - zone.start_ticks;
 
-    dani_profiler_entry *entry = &g_profiler.entries[zone.entry_index];
+    dani_profiler_entry *entry = &g_dani_profiler.entries[zone.entry_index];
     entry->elapsed_ticks += elapsed_ticks;
     entry->hit_counter += 1;
     entry->name = zone.name;
