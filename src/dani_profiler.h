@@ -10,7 +10,8 @@
 // Dependencies:
 // dani_base.h - for the basic types
 // Windows.h - for QueryPerformanceCounter and QueryPerformanceFrequency
-// Intrin.h - for __rdtsc, __rdtscp, and __faststorefence
+// Intrin.h - for __rdtsc, __rdtscp, __faststorefence, and _InterlockedIncrement
+// stdio.h - for printf. (can be removed by specifying DANI_PROFILER_PRINTF)
 //
 // Notes:
 // This library is *NOT* thread safe. If you are in need of profiling across multiple threads you have to make this code thread safe or you might want to consider using a different library better suited for your needs.
