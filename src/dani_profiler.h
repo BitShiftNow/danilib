@@ -33,9 +33,9 @@
 // // Add your code you want to profile here
 // dani_EndProfilingZone(my_zone);
 //
-// This pattern can be simplified by using the dani_Profile macro which uses __COUNTER__ as the index.
+// This pattern can be simplified by using the dani_Profile macro.
 //
-// dani_Profile(my_zone, "Zone Name", {
+// dani_Profile("Zone Name", {
 //      // Add your code you want to profile here 
 // });
 //
@@ -100,17 +100,17 @@ __DANI_PROFILER_DEC u32 dani_GetNextProfilerZoneIndex(void);
 __DANI_PROFILER_DEC dani_profiler_zone dani_BeginProfilingZone(const s8 *name, u32 index);
 __DANI_PROFILER_DEC void dani_EndProfilingZone(dani_profiler_zone zone);
 
-#define dani_Profile(var_name, zone_name, profile_block) Statement({\
-    static u32 StringifyCombine(var_name,entry_index) = 0;\
-    if (StringifyCombine(var_name,entry_index) == 0) {\
-        StringifyCombine(var_name,entry_index) = dani_GetNextProfilerZoneIndex();\
+#define dani_Profile(zone_name, profile_block) Statement({\
+    static u32 __entry_index = 0;\
+    if (__entry_index == 0) {\
+        __entry_index = dani_GetNextProfilerZoneIndex();\
     }\
-    dani_profiler_zone var_name = dani_BeginProfilingZone(zone_name, StringifyCombine(var_name,entry_index));\
+    dani_profiler_zone __profile_zone = dani_BeginProfilingZone(zone_name, __entry_index);\
     profile_block\
-    dani_EndProfilingZone(var_name);\
+    dani_EndProfilingZone(__profile_zone);\
     })
 
-#define dani_ProfileFunction(profile_block) dani_Profile(StringifyCombine(__func__,_zone),__func__, profile_block)
+#define dani_ProfileFunction(profile_block) dani_Profile(__func__, profile_block)
 
 #endif // __DANI_LIB_PROFILER_H
 
