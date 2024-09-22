@@ -28,7 +28,7 @@
 // Restarting profiling after calling dani_EndProfiling() will give invalid results. Consider a profiling runtime to also be the program runtime.
 // To time multiple statements of code use dani_BeginProfilingZone() and dani_EndProfilingZone() like so:
 // 
-// u32 index = GetNextEntryIndex(); // The maximum valid index depends on DANI_PROFILER_ENTRIES_MAX.
+// u32 index = dani_GetNextProfilerZoneIndex(); // The maximum valid index depends on DANI_PROFILER_ENTRIES_MAX.
 // dani_profiler_zone my_zone = dani_BeginProfilingZone("Zone Name", index); 
 // // Add your code you want to profile here
 // dani_EndProfilingZone(my_zone);
@@ -96,14 +96,14 @@ __DANI_PROFILER_DEC void dani_BeginProfiling(void);
 __DANI_PROFILER_DEC void dani_EndProfiling(void);
 __DANI_PROFILER_DEC void dani_PrintProfilingResults(void);
 
-__DANI_PROFILER_DEC u32 GetNextEntryIndex(void);
+__DANI_PROFILER_DEC u32 dani_GetNextProfilerZoneIndex(void);
 __DANI_PROFILER_DEC dani_profiler_zone dani_BeginProfilingZone(const s8 *name, u32 index);
 __DANI_PROFILER_DEC void dani_EndProfilingZone(dani_profiler_zone zone);
 
 #define dani_Profile(var_name, zone_name, profile_block) Statement({\
     static u32 StringifyCombine(var_name,entry_index) = 0;\
     if (StringifyCombine(var_name,entry_index) == 0) {\
-        StringifyCombine(var_name,entry_index) = GetNextEntryIndex();\
+        StringifyCombine(var_name,entry_index) = dani_GetNextProfilerZoneIndex();\
     }\
     dani_profiler_zone var_name = dani_BeginProfilingZone(zone_name, StringifyCombine(var_name,entry_index));\
     profile_block\
@@ -259,7 +259,7 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
 
 static volatile s32 g_dani_profiler_entry_index_conter = 0;
 
-__DANI_PROFILER_DEF u32 GetNextEntryIndex(void) {
+__DANI_PROFILER_DEF u32 dani_GetNextProfilerZoneIndex(void) {
     u32 result = (u32)_InterlockedIncrement((volatile long *)&g_dani_profiler_entry_index_conter);
     Assert(result != 0 && result < DANI_PROFILER_ENTRIES_MAX);
     return (result);
