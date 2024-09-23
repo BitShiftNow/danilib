@@ -244,25 +244,21 @@ static void PrintProfilingTimes(u64 elapsed_ticks, u64 cpu_frequency) {
     }
 }
 
-static void PrintCPUFrequency(f64 cpu_frequency) {
-    s8 *format = "%0.2f Hz";
+static void PrintProfilingValueAsSIUnit(u64 value, const s8 *base_unit) {
+    s8 prefix;
 
-    if (cpu_frequency > 1000.0) {
-        cpu_frequency /= 1000.0;
-        format = "%0.2f kHz";
+    f64 fval = (f64)value;
+    if (value > Tera(1)) { prefix = 'T'; fval /= Tera(1); }
+    else if (value > Giga(1)) { prefix = 'G'; fval /= Giga(1); }
+    else if (value > Mega(1)) { prefix = 'M'; fval /= Mega(1); }
+    else if (value > Kilo(1)) { prefix = 'k'; fval /= Kilo(1); }
+    else { prefix = '\0'; }
 
-        if (cpu_frequency > 1000.0) {
-            cpu_frequency /= 1000.0;
-            format = "%0.2f MHz";
-
-            if (cpu_frequency > 1000.0) {
-                cpu_frequency /= 1000.0;
-                format = "%0.2f GHz";
-            }
-        }
+    if (prefix) {
+        DANI_PROFILER_PRINTF("%0.2f%c%s", fval, prefix, base_unit);
+    } else {
+        DANI_PROFILER_PRINTF("%llu%s", value, base_unit);
     }
-
-    DANI_PROFILER_PRINTF(format, cpu_frequency);
 }
 
 #if DANI_PROFILER_ENABLED
@@ -336,7 +332,7 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
         DANI_PROFILER_PRINTF("Total time: ");
         PrintProfilingTimes(elapsed_total_ticks, cpu_frequency);
         DANI_PROFILER_PRINTF(" @ ");
-        PrintCPUFrequency((f64)cpu_frequency);
+        PrintProfilingValueAsSIUnit(cpu_frequency, "Hz");
         DANI_PROFILER_PRINTF("\n\n");
 
         #if DANI_PROFILER_ENABLED
@@ -344,7 +340,9 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
             dani_profiler_entry *entry = &g_dani_profiler.entries[entry_index];
             if (entry->inclusive_ticks) {
                 // Total time
-                DANI_PROFILER_PRINTF("  %s[%llu] Total - ", entry->name, entry->hit_counter);
+                DANI_PROFILER_PRINTF("  %s[", entry->name);
+                PrintProfilingValueAsSIUnit(entry->hit_counter, "");
+                DANI_PROFILER_PRINTF("] Total - ");
                 PrintInclusiveAndExclusiveProfilingTimes(entry->inclusive_ticks, entry->exclusive_ticks, elapsed_total_ticks, cpu_frequency);
 
                 // Average time
