@@ -20,8 +20,10 @@
 // To use static versions of the functions specify DANI_PROFILER_STATIC before including this file.
 // By default the profiles is able to record up to 1024 entries. If you want to tweak this value specify DANI_PROFILER_ENTRIES_MAX before including this file.
 // To print the profiling results this library is using printf by default. However, you can change the print function by specifying DANI_PROFILER_PRINTF(...) before including this file.
+// To enable to disable the profiles define DANI_PROFILER_ENABLED with 1 or 0 respectively. By default the profiler is disabled. all profiling functions and macros will be stubbed out, with the exception of dani_BeginProfiling, dani_EndProfiling, and dani_PrintProfilingResults. These will still work and simply collect the overall elapsed time of the program without any sub-blocks.
 //
 // How to use:
+// Enable the profiler by defining "DANI_PROFILER_ENABLED 1" before including the library. See Notes for details.
 // To start Profiling call dani_BeginProfiling();
 // To stop profiling call dani_EndProfiling();
 // To print profiling results call dani_PrintProfilingResults();
@@ -68,6 +70,12 @@
 #define DANI_PROFILER_PRINTF(...) printf(__VA_ARGS__)
 #endif
 
+#ifndef DANI_PROFILER_ENABLED
+#define DANI_PROFILER_ENABLED 0
+#endif
+
+#if DANI_PROFILER_ENABLED
+
 typedef struct __DANI_PROFILER_ENTRY dani_profiler_entry;
 struct __DANI_PROFILER_ENTRY {
     u64 inclusive_ticks;
@@ -75,16 +83,6 @@ struct __DANI_PROFILER_ENTRY {
     u64 hit_counter;
 
     const s8 *name;
-};
-
-typedef struct __DANI_PROFILER dani_profiler;
-struct __DANI_PROFILER {
-    dani_profiler_entry entries[DANI_PROFILER_ENTRIES_MAX];
-
-    u64 start_ticks;
-    u64 end_ticks;
-
-    u32 current_index;
 };
 
 typedef struct __DANI_PROFILER_ZONE dani_profiler_zone;
@@ -96,6 +94,16 @@ struct __DANI_PROFILER_ZONE {
 
     u32 entry_index;
     u32 parent_index;
+};
+
+typedef struct __DANI_PROFILER dani_profiler;
+struct __DANI_PROFILER {
+    dani_profiler_entry entries[DANI_PROFILER_ENTRIES_MAX];
+
+    u64 start_ticks;
+    u64 end_ticks;
+
+    u32 current_index;
 };
 
 __DANI_PROFILER_DEC void dani_BeginProfiling(void);
@@ -117,6 +125,32 @@ __DANI_PROFILER_DEC void dani_EndProfilingZone(dani_profiler_zone zone);
     })
 
 #define dani_ProfileFunction(profile_block) dani_Profile(__func__, profile_block)
+
+#else // NOT DANI_PROFILER_ENABLED
+
+typedef u64 dani_profiler_zone; 
+typedef struct __DANI_PROFILER dani_profiler;
+struct __DANI_PROFILER {
+    u64 start_ticks;
+    u64 end_ticks;
+};
+
+__DANI_PROFILER_DEC void dani_BeginProfiling(void);
+__DANI_PROFILER_DEC void dani_EndProfiling(void);
+__DANI_PROFILER_DEC void dani_PrintProfilingResults(void);
+
+#define dani_GetNextProfilerZoneIndex() 0
+#define dani_BeginProfilingZone(...) 0
+#define dani_EndProfilingZone(...)
+
+#define dani_Profile(zone_name, profile_block) Statement({\
+    Unused(zone_name);\
+    profile_block\
+    })
+
+#define dani_ProfileFunction(profile_block) dani_Profile(__func__, profile_block)
+
+#endif // DANI_PROFILER_ENABLED
 
 #endif // __DANI_LIB_PROFILER_H
 
@@ -231,6 +265,8 @@ static void PrintCPUFrequency(f64 cpu_frequency) {
     DANI_PROFILER_PRINTF(format, cpu_frequency);
 }
 
+#if DANI_PROFILER_ENABLED
+
 static void PrintInclusiveAndExclusiveProfilingTimes(u64 elapsed_inclusive, u64 elapsed_exclusive, u64 elapsed_total, u64 cpu_frequency) {
     f64 inclusive_percentage = ((f64)elapsed_inclusive / (f64)elapsed_total) * 100.0;
     f64 exclusive_percentage = ((f64)elapsed_exclusive / (f64)elapsed_total) * 100.0;
@@ -248,39 +284,6 @@ static void PrintInclusiveAndExclusiveProfilingTimes(u64 elapsed_inclusive, u64 
     }
     DANI_PROFILER_PRINTF(format, exclusive_percentage);
     PrintProfilingTimes(elapsed_exclusive, cpu_frequency);
-}
-
-__DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
-    u64 cpu_frequency = ReadCPUTimerFrequency(100);
-    u64 elapsed_total_ticks = g_dani_profiler.end_ticks - g_dani_profiler.start_ticks;
-
-    if (cpu_frequency) {
-        DANI_PROFILER_PRINTF("Total time: ");
-        PrintProfilingTimes(elapsed_total_ticks, cpu_frequency);
-        DANI_PROFILER_PRINTF(" @ ");
-        PrintCPUFrequency((f64)cpu_frequency);
-        DANI_PROFILER_PRINTF("\n\n");
-
-        for (u32 entry_index = 0; entry_index < ArrayCount(g_dani_profiler.entries); entry_index += 1) {
-            dani_profiler_entry *entry = &g_dani_profiler.entries[entry_index];
-            if (entry->inclusive_ticks) {
-                // Total time
-                DANI_PROFILER_PRINTF("  %s[%llu] Total - ", entry->name, entry->hit_counter);
-                PrintInclusiveAndExclusiveProfilingTimes(entry->inclusive_ticks, entry->exclusive_ticks, elapsed_total_ticks, cpu_frequency);
-
-                // Average time
-                u64 average_inclusive = entry->inclusive_ticks / entry->hit_counter;
-                u64 average_exclusive = entry->exclusive_ticks / entry->hit_counter;
-
-                DANI_PROFILER_PRINTF("\n    Average - ", entry->name, entry->hit_counter);
-                PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
-
-                DANI_PROFILER_PRINTF("\n\n");
-            }
-        }
-    } else {
-        DANI_PROFILER_PRINTF("Total ticks: %llu (Failed to estimate CPU frequency!)\n", elapsed_total_ticks);
-    }
 }
 
 static volatile s32 g_dani_profiler_entry_index_conter = 0;
@@ -321,6 +324,43 @@ __DANI_PROFILER_DEF void dani_EndProfilingZone(dani_profiler_zone zone) {
     entry->name = zone.name;
 
     g_dani_profiler.current_index = zone.parent_index;
+}
+
+#endif // DANI_PROFILER_ENABLED
+
+__DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
+    u64 cpu_frequency = ReadCPUTimerFrequency(100);
+    u64 elapsed_total_ticks = g_dani_profiler.end_ticks - g_dani_profiler.start_ticks;
+
+    if (cpu_frequency) {
+        DANI_PROFILER_PRINTF("Total time: ");
+        PrintProfilingTimes(elapsed_total_ticks, cpu_frequency);
+        DANI_PROFILER_PRINTF(" @ ");
+        PrintCPUFrequency((f64)cpu_frequency);
+        DANI_PROFILER_PRINTF("\n\n");
+
+        #if DANI_PROFILER_ENABLED
+        for (u32 entry_index = 0; entry_index < ArrayCount(g_dani_profiler.entries); entry_index += 1) {
+            dani_profiler_entry *entry = &g_dani_profiler.entries[entry_index];
+            if (entry->inclusive_ticks) {
+                // Total time
+                DANI_PROFILER_PRINTF("  %s[%llu] Total - ", entry->name, entry->hit_counter);
+                PrintInclusiveAndExclusiveProfilingTimes(entry->inclusive_ticks, entry->exclusive_ticks, elapsed_total_ticks, cpu_frequency);
+
+                // Average time
+                u64 average_inclusive = entry->inclusive_ticks / entry->hit_counter;
+                u64 average_exclusive = entry->exclusive_ticks / entry->hit_counter;
+
+                DANI_PROFILER_PRINTF("\n    Average - ", entry->name, entry->hit_counter);
+                PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
+
+                DANI_PROFILER_PRINTF("\n\n");
+            }
+        }
+        #endif // DANI_PROFILER_ENABLED
+    } else {
+        DANI_PROFILER_PRINTF("Total ticks: %llu (Failed to estimate CPU frequency!)\n", elapsed_total_ticks);
+    }
 }
 
 #endif // DANI_LIB_PROFILER_IMPLEMENTATION
