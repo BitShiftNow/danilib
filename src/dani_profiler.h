@@ -235,10 +235,18 @@ static void PrintInclusiveAndExclusiveProfilingTimes(u64 elapsed_inclusive, u64 
     f64 inclusive_percentage = ((f64)elapsed_inclusive / (f64)elapsed_total) * 100.0;
     f64 exclusive_percentage = ((f64)elapsed_exclusive / (f64)elapsed_total) * 100.0;
 
-    DANI_PROFILER_PRINTF("Incl[%0.2f%%]: ", inclusive_percentage);
+    const s8 *format = "Incl[%0.2f%%]: ";
+    if (inclusive_percentage < 1.0) {
+        format = "Incl[%0.4f%%]: ";
+    }
+    DANI_PROFILER_PRINTF(format, inclusive_percentage);
     PrintProfilingTimes(elapsed_inclusive, cpu_frequency);
 
-    DANI_PROFILER_PRINTF(", Excl[%0.2f%%]: ", exclusive_percentage);
+    format = ", Excl[%0.2f%%]: ";
+    if (inclusive_percentage < 1.0) {
+        format = ", Excl[%0.4f%%]: ";
+    }
+    DANI_PROFILER_PRINTF(format, exclusive_percentage);
     PrintProfilingTimes(elapsed_exclusive, cpu_frequency);
 }
 
