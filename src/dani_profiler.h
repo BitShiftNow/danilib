@@ -70,8 +70,8 @@
 
 typedef struct __DANI_PROFILER_ENTRY dani_profiler_entry;
 struct __DANI_PROFILER_ENTRY {
-    u64 elapsed_ticks;
-    u64 elapsed_child_ticks;
+    u64 inclusive_ticks;
+    u64 exclusive_ticks;
     u64 hit_counter;
 
     const s8 *name;
@@ -92,6 +92,7 @@ struct __DANI_PROFILER_ZONE {
     const s8 *name;
 
     u64 start_ticks;
+    u64 inclusive_ticks;
 
     u32 entry_index;
     u32 parent_index;
@@ -254,18 +255,16 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
 
         for (u32 entry_index = 0; entry_index < ArrayCount(g_dani_profiler.entries); entry_index += 1) {
             dani_profiler_entry *entry = &g_dani_profiler.entries[entry_index];
-            if (entry->elapsed_ticks) {
-                DANI_PROFILER_PRINTF("  %s[%llu] Total - ", entry->name, entry->hit_counter);
-
+            if (entry->inclusive_ticks) {
                 // Total time
-                u64 elapsed_zone_ticks = entry->elapsed_ticks - entry->elapsed_child_ticks;
-                PrintInclusiveAndExclusiveProfilingTimes(entry->elapsed_ticks, elapsed_zone_ticks, elapsed_total_ticks, cpu_frequency);
-
-                DANI_PROFILER_PRINTF("\n    Average - ", entry->name, entry->hit_counter);
+                DANI_PROFILER_PRINTF("  %s[%llu] Total - ", entry->name, entry->hit_counter);
+                PrintInclusiveAndExclusiveProfilingTimes(entry->inclusive_ticks, entry->exclusive_ticks, elapsed_total_ticks, cpu_frequency);
 
                 // Average time
-                u64 average_inclusive = entry->elapsed_ticks / entry->hit_counter;
-                u64 average_exclusive = elapsed_zone_ticks / entry->hit_counter;
+                u64 average_inclusive = entry->inclusive_ticks / entry->hit_counter;
+                u64 average_exclusive = entry->exclusive_ticks / entry->hit_counter;
+
+                DANI_PROFILER_PRINTF("\n    Average - ", entry->name, entry->hit_counter);
                 PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
 
                 DANI_PROFILER_PRINTF("\n\n");
@@ -290,6 +289,7 @@ __DANI_PROFILER_DEF dani_profiler_zone dani_BeginProfilingZone(const s8 *name, u
     result.name = name;
 
     result.start_ticks = ReadStartCPUTimer();
+    result.inclusive_ticks = g_dani_profiler.entries[index].inclusive_ticks;
 
     result.entry_index = index;
     result.parent_index = g_dani_profiler.current_index;
@@ -305,9 +305,10 @@ __DANI_PROFILER_DEF void dani_EndProfilingZone(dani_profiler_zone zone) {
     dani_profiler_entry *parent = &g_dani_profiler.entries[zone.parent_index];
     dani_profiler_entry *entry = &g_dani_profiler.entries[zone.entry_index];
     
-    parent->elapsed_child_ticks += elapsed_ticks;
+    parent->exclusive_ticks -= elapsed_ticks;
 
-    entry->elapsed_ticks += elapsed_ticks;
+    entry->inclusive_ticks = zone.inclusive_ticks + elapsed_ticks;
+    entry->exclusive_ticks += elapsed_ticks;
     entry->hit_counter += 1;
     entry->name = zone.name;
 
