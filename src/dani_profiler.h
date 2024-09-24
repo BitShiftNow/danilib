@@ -2,6 +2,7 @@
 // Types and functions for profiling C code.
 //
 // Author: Dani Drywa (dani@drywa.me)
+// This library is based on what I learned from Casey Muratori's excellent performance aware programming course at https://www.computerenhance.com/ and some other resources about benchmarking.
 //
 // Last change: 2024/09/23 (yyyy/mm/dd)
 //
