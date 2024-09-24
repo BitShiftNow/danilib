@@ -76,7 +76,7 @@ typedef u32 b32;
 #define Kilo(kilo) ((kilo) * 1000)
 #define Mega(mega) (Kilo(mega) * 1000)
 #define Giga(giga) (Mega(giga) * 1000)
-#define Tera(tera) (Giga(tera) * 1000)
+#define Tera(tera) (Giga(tera) * 1000ll)
 
 #define Thousand(thousand) Kilo(thousand)
 #define Million(million) Mega(million)
