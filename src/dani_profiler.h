@@ -334,12 +334,14 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
         PrintProfilingTimes(elapsed_total_ticks, cpu_frequency);
         DANI_PROFILER_PRINTF(" @ ");
         PrintProfilingValueAsSIUnit(cpu_frequency, "Hz");
-        DANI_PROFILER_PRINTF("\n\n");
+        DANI_PROFILER_PRINTF("\n");
 
         #if DANI_PROFILER_ENABLED
         for (u32 entry_index = 0; entry_index < ArrayCount(g_dani_profiler.entries); entry_index += 1) {
             dani_profiler_entry *entry = &g_dani_profiler.entries[entry_index];
             if (entry->inclusive_ticks) {
+                DANI_PROFILER_PRINTF("\n");
+
                 // Total time
                 DANI_PROFILER_PRINTF("  %s[", entry->name);
                 PrintProfilingValueAsSIUnit(entry->hit_counter, "");
@@ -350,10 +352,10 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                 u64 average_inclusive = entry->inclusive_ticks / entry->hit_counter;
                 u64 average_exclusive = entry->exclusive_ticks / entry->hit_counter;
 
-                DANI_PROFILER_PRINTF("\n    Average - ", entry->name, entry->hit_counter);
+                DANI_PROFILER_PRINTF("\n    Average - ");
                 PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
 
-                DANI_PROFILER_PRINTF("\n\n");
+                DANI_PROFILER_PRINTF("\n");
             }
         }
         #endif // DANI_PROFILER_ENABLED
