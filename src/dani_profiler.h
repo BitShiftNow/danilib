@@ -24,6 +24,8 @@
 // To print the profiling results this library is using printf by default. However, you can change the print function by specifying DANI_PROFILER_PRINTF(...) before including this file.
 // To enable or disable the profiler define DANI_PROFILER_ENABLED with 1 or 0 respectively. By default the profiler is disabled. All profiling functions and macros will be stubbed out, with the exception of dani_BeginProfiling, dani_EndProfiling, and dani_PrintProfilingResults. These will still work and simply collect the overall elapsed time of the program without any sub-blocks.
 // To collect memory page fault metrics set DANI_PROFILER_PAGE_FAULTS to 1. This even takes effect if DANI_PROFILER_ENABLED is set to 0, it will just collect page faults for the overall runtime. Memory page faults are always an inclusive count, which means they include all page faults of sub-zones as well.
+// To enable collecting of min and max values set DANI_PROFILER_MIN_MAX to 1.
+// To enable everything the profiler has to offer you can define DANI_PROFILER_ENABLE_ALL before including this library. This will overwrite any previous settings and enable everything.
 //
 // How to use:
 // Enable the profiler by defining "DANI_PROFILER_ENABLED 1" before including the library. See Notes for details.
@@ -75,12 +77,22 @@
 #define DANI_PROFILER_PRINTF(...) printf(__VA_ARGS__)
 #endif
 
+#ifdef DANI_PROFILER_ENABLE_ALL
+#define DANI_PROFILER_ENABLED 1
+#define DANI_PROFILER_PAGE_FAULTS 1
+#define DANI_PROFILER_MIN_MAX 1
+#endif // DANI_PROFILER_ENABLE_ALL
+
 #ifndef DANI_PROFILER_ENABLED
 #define DANI_PROFILER_ENABLED 0
 #endif
 
 #ifndef DANI_PROFILER_PAGE_FAULTS
 #define DANI_PROFILER_PAGE_FAULTS 0
+#endif
+
+#ifndef DANI_PROFILER_MIN_MAX
+#define DANI_PROFILER_MIN_MAX 0
 #endif
 
 #if DANI_PROFILER_ENABLED
@@ -96,6 +108,11 @@ struct __DANI_PROFILER_ENTRY {
 #if DANI_PROFILER_PAGE_FAULTS
     u64 page_fault_counter;
 #endif // DANI_PROFILER_PAGE_FAULTS
+
+#if DANI_PROFILER_MIN_MAX
+    u64 inclusive_ticks_min;
+    u64 inclusive_ticks_max;
+#endif // DANI_PROFILER_MIN_MAX
 
     const s8 *name;
 };
@@ -344,7 +361,7 @@ static void PrintProfilingValueAsSIUnit(f64 value, const s8 *base_unit) {
     if (prefix) {
         DANI_PROFILER_PRINTF("%0.2f%c%s", value, prefix, base_unit);
     } else {
-        DANI_PROFILER_PRINTF("%0.2f%s", value, base_unit);
+        DANI_PROFILER_PRINTF("%0.0f%s", value, base_unit);
     }
 }
 
@@ -360,7 +377,7 @@ static void PrintProfilingByteCount(f64 byte_count) {
     if (prefix) {
         DANI_PROFILER_PRINTF("%0.2f%s", byte_count, prefix);
     } else {
-        DANI_PROFILER_PRINTF("%0.2fbyte", byte_count);
+        DANI_PROFILER_PRINTF("%0.0fbyte", byte_count);
     }
 }
 
@@ -368,20 +385,13 @@ static void PrintProfilingByteCount(f64 byte_count) {
 
 static void PrintInclusiveAndExclusiveProfilingTimes(u64 elapsed_inclusive, u64 elapsed_exclusive, u64 elapsed_total, u64 cpu_frequency) {
     f64 inclusive_percentage = ((f64)elapsed_inclusive / (f64)elapsed_total) * 100.0;
-    f64 exclusive_percentage = ((f64)elapsed_exclusive / (f64)elapsed_total) * 100.0;
-
-    const s8 *format = "Incl[%0.2f%%]: ";
-    if (inclusive_percentage < 1.0) {
-        format = "Incl[%0.4f%%]: ";
-    }
-    DANI_PROFILER_PRINTF(format, inclusive_percentage);
+    
+    DANI_PROFILER_PRINTF("Incl[%0.2f%%]: ", inclusive_percentage);
     PrintProfilingTimes(elapsed_inclusive, cpu_frequency);
 
-    format = ", Excl[%0.2f%%]: ";
-    if (inclusive_percentage < 1.0) {
-        format = ", Excl[%0.4f%%]: ";
-    }
-    DANI_PROFILER_PRINTF(format, exclusive_percentage);
+    f64 exclusive_percentage = ((f64)elapsed_exclusive / (f64)elapsed_total) * 100.0;
+
+    DANI_PROFILER_PRINTF(", Excl[%0.2f%%]: ", exclusive_percentage);
     PrintProfilingTimes(elapsed_exclusive, cpu_frequency);
 }
 
@@ -394,6 +404,18 @@ static void PrintProfilingBandwidth(u64 processed_bytes_count, u64 elapsed_inclu
     DANI_PROFILER_PRINTF("]: ");
     PrintProfilingByteCount(bytes_per_second);
     DANI_PROFILER_PRINTF("/s");
+}
+
+static void PrintInclusiveMinAndMaxProfilingTimes(u64 elapsed_min, u64 elapsed_max, u64 elapsed_total, u64 cpu_frequency) {
+    f64 percentage_min = ((f64)elapsed_min / (f64)elapsed_total) * 100.0;
+
+    DANI_PROFILER_PRINTF("Min[%0.2f%%]: ", percentage_min);
+    PrintProfilingTimes(elapsed_min, cpu_frequency);
+
+    f64 percentage_max = ((f64)elapsed_max / (f64)elapsed_total) * 100.0;
+
+    DANI_PROFILER_PRINTF(", Max[%0.2f%%]: ", percentage_max);
+    PrintProfilingTimes(elapsed_max, cpu_frequency);
 }
 
 static volatile s32 g_dani_profiler_entry_index_conter = 0;
@@ -437,13 +459,28 @@ __DANI_PROFILER_DEF void dani_EndProfilingZone(dani_profiler_zone zone) {
 
     entry->inclusive_ticks = zone.inclusive_ticks + elapsed_ticks;
     entry->exclusive_ticks += elapsed_ticks;
-    entry->hit_counter += 1;
     entry->name = zone.name;
 
 #if DANI_PROFILER_PAGE_FAULTS
     u64 end_page_faults = ReadOSPageFaultCount();
     entry->page_fault_counter = end_page_faults - zone.start_page_faults;
 #endif // DANI_PROFILER_PAGE_FAULTS
+
+#if DANI_PROFILER_MIN_MAX
+    if (entry->hit_counter == 0) {
+        entry->inclusive_ticks_min = elapsed_ticks;
+        entry->inclusive_ticks_max = elapsed_ticks;
+    } else {
+        if (elapsed_ticks < entry->inclusive_ticks_min) {
+            entry->inclusive_ticks_min = elapsed_ticks;
+        }
+        if (elapsed_ticks > entry->inclusive_ticks_max) {
+            entry->inclusive_ticks_max = elapsed_ticks;
+        }
+    }
+#endif // DANI_PROFILER_MIN_MAX
+
+    entry->hit_counter += 1;
 
     g_dani_profiler.current_index = zone.parent_index;
 }
@@ -492,15 +529,17 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
 #endif // DANI_PROFILER_PAGE_FAULTS
 
                 // Average time
-                u64 average_inclusive = entry->inclusive_ticks / entry->hit_counter;
-                u64 average_exclusive = entry->exclusive_ticks / entry->hit_counter;
+                if (entry->hit_counter > 1) {
+                    u64 average_inclusive = entry->inclusive_ticks / entry->hit_counter;
+                    u64 average_exclusive = entry->exclusive_ticks / entry->hit_counter;
 
-                DANI_PROFILER_PRINTF("\n    Average - ");
-                PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
+                    DANI_PROFILER_PRINTF("\n    Average - ");
+                    PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
 
-                if (entry->processed_bytes_counter) {
-                    u64 average_bytes = entry->processed_bytes_counter / entry->hit_counter;
-                    PrintProfilingBandwidth(average_bytes, average_inclusive, cpu_frequency);
+                    if (entry->processed_bytes_counter) {
+                        u64 average_bytes = entry->processed_bytes_counter / entry->hit_counter;
+                        PrintProfilingBandwidth(average_bytes, average_inclusive, cpu_frequency);
+                    }
                 }
 
 #if DANI_PROFILER_PAGE_FAULTS
@@ -510,6 +549,14 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                     PrintProfilingValueAsSIUnit(average_page_faults, "");
                 }
 #endif // DANI_PROFILER_PAGE_FAULTS
+
+#if DANI_PROFILER_MIN_MAX
+                // Max & max time
+                if (entry->hit_counter > 1 && entry->inclusive_ticks_max) {
+                    DANI_PROFILER_PRINTF("\n    Extreme - ");
+                    PrintInclusiveMinAndMaxProfilingTimes(entry->inclusive_ticks_min, entry->inclusive_ticks_max, elapsed_total_ticks, cpu_frequency);
+                }
+#endif // DANI_PROFILER_MIN_MAX
 
                 DANI_PROFILER_PRINTF("\n");
             }
