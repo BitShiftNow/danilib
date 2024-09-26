@@ -83,8 +83,9 @@ typedef struct __DANI_PROFILER_ENTRY dani_profiler_entry;
 struct __DANI_PROFILER_ENTRY {
     u64 inclusive_ticks;
     u64 exclusive_ticks;
+
     u64 hit_counter;
-    u64 bytes_processed;
+    u64 processed_bytes_counter;
 
     const s8 *name;
 };
@@ -226,6 +227,7 @@ static u64 ReadCPUTimerFrequency(u64 wait_time_ms) {
     return (result);
 }
 
+
 static dani_profiler g_dani_profiler = {0};
 
 __DANI_PROFILER_DEF void dani_BeginProfiling(void) {
@@ -319,12 +321,12 @@ static void PrintInclusiveAndExclusiveProfilingTimes(u64 elapsed_inclusive, u64 
     PrintProfilingTimes(elapsed_exclusive, cpu_frequency);
 }
 
-static void PrintProfilingBandwidth(u64 bytes_processed, u64 elapsed_inclusive, u64 cpu_frequency) {
+static void PrintProfilingBandwidth(u64 processed_bytes_count, u64 elapsed_inclusive, u64 cpu_frequency) {
     f64 ticks_per_second = ((f64)elapsed_inclusive / (f64)cpu_frequency);
-    f64 bytes_per_second = ((f64)bytes_processed / ticks_per_second);
+    f64 bytes_per_second = ((f64)processed_bytes_count / ticks_per_second);
 
     DANI_PROFILER_PRINTF(", Bandwidth[");
-    PrintProfilingByteCount((f64)bytes_processed);
+    PrintProfilingByteCount((f64)processed_bytes_count);
     DANI_PROFILER_PRINTF("]: ");
     PrintProfilingByteCount(bytes_per_second);
     DANI_PROFILER_PRINTF("/s");
@@ -344,7 +346,7 @@ __DANI_PROFILER_DEF dani_profiler_zone dani_BeginProfilingZone(const s8 *name, u
     result.name = name;
 
     dani_profiler_entry *entry = &g_dani_profiler.entries[index];
-    entry->bytes_processed += byte_count;
+    entry->processed_bytes_counter += byte_count;
     result.inclusive_ticks = entry->inclusive_ticks;
 
     result.entry_index = index;
@@ -398,8 +400,8 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                 DANI_PROFILER_PRINTF("] Total - ");
                 PrintInclusiveAndExclusiveProfilingTimes(entry->inclusive_ticks, entry->exclusive_ticks, elapsed_total_ticks, cpu_frequency);
 
-                if (entry->bytes_processed) {
-                    PrintProfilingBandwidth(entry->bytes_processed, entry->inclusive_ticks, cpu_frequency);
+                if (entry->processed_bytes_counter) {
+                    PrintProfilingBandwidth(entry->processed_bytes_counter, entry->inclusive_ticks, cpu_frequency);
                 }
 
                 // Average time
@@ -409,8 +411,8 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                 DANI_PROFILER_PRINTF("\n    Average - ");
                 PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
 
-                if (entry->bytes_processed) {
-                    u64 average_bytes = entry->bytes_processed / entry->hit_counter;
+                if (entry->processed_bytes_counter) {
+                    u64 average_bytes = entry->processed_bytes_counter / entry->hit_counter;
                     PrintProfilingBandwidth(average_bytes, average_inclusive, cpu_frequency);
                 }
 
