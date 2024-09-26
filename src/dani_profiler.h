@@ -52,6 +52,8 @@
 //
 // If the function returns the declaration of the return value and the return statement should not be in the dani_ProfileFunction block.
 //
+// The last argument of dani_BeginProfilingZone is the number of bytes that are about to be processed by the profiling zone. This can remain 0 if you don't with to track the bandwidth. To profile with the bandwidth included you have to provide the byte count. You can use the dani_ProfileBandwidth and dani_ProfileFunctionBandwidth macros in the same way you would use the dani_Profile and dani_ProfileFunction macros. The only difference is that it takes in a byte count argument as well.
+//
 #ifndef __DANI_LIB_PROFILER_H
 #define __DANI_LIB_PROFILER_H
 
