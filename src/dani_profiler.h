@@ -509,8 +509,6 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
         for (u32 entry_index = 0; entry_index < ArrayCount(g_dani_profiler.entries); entry_index += 1) {
             dani_profiler_entry *entry = &g_dani_profiler.entries[entry_index];
             if (entry->inclusive_ticks) {
-                DANI_PROFILER_PRINTF("\n");
-
                 // Total time
                 DANI_PROFILER_PRINTF("  %s[", entry->name);
                 PrintProfilingValueAsSIUnit((f64)entry->hit_counter, "");
@@ -540,15 +538,15 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                         u64 average_bytes = entry->processed_bytes_counter / entry->hit_counter;
                         PrintProfilingBandwidth(average_bytes, average_inclusive, cpu_frequency);
                     }
-                }
 
 #if DANI_PROFILER_PAGE_FAULTS
-                if (entry->page_fault_counter) {
-                    f64 average_page_faults = ((f64)entry->page_fault_counter / (f64)entry->hit_counter);
-                    DANI_PROFILER_PRINTF(", Page faults: ");
-                    PrintProfilingValueAsSIUnit(average_page_faults, "");
-                }
+                    if (entry->page_fault_counter) {
+                        f64 average_page_faults = ((f64)entry->page_fault_counter / (f64)entry->hit_counter);
+                        DANI_PROFILER_PRINTF(", Page faults: ");
+                        PrintProfilingValueAsSIUnit(average_page_faults, "");
+                    }
 #endif // DANI_PROFILER_PAGE_FAULTS
+                }
 
 #if DANI_PROFILER_MIN_MAX
                 // Max & max time
@@ -557,7 +555,6 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                     PrintInclusiveMinAndMaxProfilingTimes(entry->inclusive_ticks_min, entry->inclusive_ticks_max, elapsed_total_ticks, cpu_frequency);
                 }
 #endif // DANI_PROFILER_MIN_MAX
-
                 DANI_PROFILER_PRINTF("\n");
             }
         }
