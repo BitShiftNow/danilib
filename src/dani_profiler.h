@@ -4,7 +4,7 @@
 // Author: Dani Drywa (dani@drywa.me)
 // This library is based on what I learned from Casey Muratori's excellent performance aware programming course at https://www.computerenhance.com/ and some other resources about benchmarking.
 //
-// Last change: 2024/09/26 (yyyy/mm/dd)
+// Last change: 2024/09/27 (yyyy/mm/dd)
 //
 // License: See end of file
 //
@@ -330,7 +330,7 @@ __DANI_PROFILER_DEF void dani_EndProfiling(void) {
 }
 
 static void PrintProfilingTimes(u64 elapsed_ticks, u64 cpu_frequency) {
-    f64 seconds = (f64)elapsed_ticks / (f64)cpu_frequency;
+    f64 seconds = ((f64)elapsed_ticks / (f64)cpu_frequency);
     if (seconds < 1.0) {
         f64 milliseconds = seconds * 1000.0;
         if (milliseconds < 1.0) {
@@ -358,10 +358,13 @@ static void PrintProfilingValueAsSIUnit(f64 value, const s8 *base_unit) {
     else if (value > Kilo(1)) { prefix = 'k'; value /= Kilo(1); }
     else { prefix = '\0'; }
 
-    if (prefix) {
-        DANI_PROFILER_PRINTF("%0.2f%c%s", value, prefix, base_unit);
+    u64 int_value = (u64)value;
+    if ((f64)int_value == value) {
+        // No fractions
+        DANI_PROFILER_PRINTF("%llu%c%s", int_value, prefix, base_unit);
     } else {
-        DANI_PROFILER_PRINTF("%0.0f%s", value, base_unit);
+        // Fractions
+        DANI_PROFILER_PRINTF("%0.2f%c%s", value, prefix, base_unit);
     }
 }
 
@@ -372,12 +375,15 @@ static void PrintProfilingByteCount(f64 byte_count) {
     else if (byte_count > GiB(1)) { prefix = "GiB"; byte_count /= GiB(1); }
     else if (byte_count > MiB(1)) { prefix = "MiB"; byte_count /= MiB(1); }
     else if (byte_count > KiB(1)) { prefix = "KiB"; byte_count /= KiB(1); }
-    else { prefix = '\0'; }
+    else { prefix = "byte"; }
 
-    if (prefix) {
-        DANI_PROFILER_PRINTF("%0.2f%s", byte_count, prefix);
+    u64 int_value = (u64)byte_count;
+    if ((f64)int_value == byte_count) {
+        // No fractions
+        DANI_PROFILER_PRINTF("%llu%s", int_value, prefix);
     } else {
-        DANI_PROFILER_PRINTF("%0.0fbyte", byte_count);
+        // Fractions
+        DANI_PROFILER_PRINTF("%0.2f%s", byte_count, prefix);
     }
 }
 
@@ -385,22 +391,27 @@ static void PrintProfilingByteCount(f64 byte_count) {
 
 static void PrintInclusiveAndExclusiveProfilingTimes(u64 elapsed_inclusive, u64 elapsed_exclusive, u64 elapsed_total, u64 cpu_frequency) {
     f64 inclusive_percentage = ((f64)elapsed_inclusive / (f64)elapsed_total) * 100.0;
-    
-    DANI_PROFILER_PRINTF("Incl[%0.2f%%]: ", inclusive_percentage);
-    PrintProfilingTimes(elapsed_inclusive, cpu_frequency);
 
-    f64 exclusive_percentage = ((f64)elapsed_exclusive / (f64)elapsed_total) * 100.0;
+    if (elapsed_inclusive == elapsed_exclusive) {
+        DANI_PROFILER_PRINTF("Incl/Excl[%0.2f%%]: ", inclusive_percentage);
+        PrintProfilingTimes(elapsed_inclusive, cpu_frequency);
+    } else {
+        DANI_PROFILER_PRINTF("Incl[%0.2f%%]: ", inclusive_percentage);
+        PrintProfilingTimes(elapsed_inclusive, cpu_frequency);
 
-    DANI_PROFILER_PRINTF(", Excl[%0.2f%%]: ", exclusive_percentage);
-    PrintProfilingTimes(elapsed_exclusive, cpu_frequency);
+        f64 exclusive_percentage = ((f64)elapsed_exclusive / (f64)elapsed_total) * 100.0;
+
+        DANI_PROFILER_PRINTF(", Excl[%0.2f%%]: ", exclusive_percentage);
+        PrintProfilingTimes(elapsed_exclusive, cpu_frequency);
+    }
 }
 
-static void PrintProfilingBandwidth(u64 processed_bytes_count, u64 elapsed_inclusive, u64 cpu_frequency) {
+static void PrintProfilingBandwidth(f64 processed_bytes_count, u64 elapsed_inclusive, u64 cpu_frequency) {
     f64 ticks_per_second = ((f64)elapsed_inclusive / (f64)cpu_frequency);
-    f64 bytes_per_second = ((f64)processed_bytes_count / ticks_per_second);
+    f64 bytes_per_second = (processed_bytes_count / ticks_per_second);
 
     DANI_PROFILER_PRINTF(", Bandwidth[");
-    PrintProfilingByteCount((f64)processed_bytes_count);
+    PrintProfilingByteCount(processed_bytes_count);
     DANI_PROFILER_PRINTF("]: ");
     PrintProfilingByteCount(bytes_per_second);
     DANI_PROFILER_PRINTF("/s");
@@ -516,7 +527,7 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                 PrintInclusiveAndExclusiveProfilingTimes(entry->inclusive_ticks, entry->exclusive_ticks, elapsed_total_ticks, cpu_frequency);
 
                 if (entry->processed_bytes_counter) {
-                    PrintProfilingBandwidth(entry->processed_bytes_counter, entry->inclusive_ticks, cpu_frequency);
+                    PrintProfilingBandwidth((f64)entry->processed_bytes_counter, entry->inclusive_ticks, cpu_frequency);
                 }
 
 #if DANI_PROFILER_PAGE_FAULTS
@@ -535,7 +546,7 @@ __DANI_PROFILER_DEF void dani_PrintProfilingResults(void) {
                     PrintInclusiveAndExclusiveProfilingTimes(average_inclusive, average_exclusive, elapsed_total_ticks, cpu_frequency);
 
                     if (entry->processed_bytes_counter) {
-                        u64 average_bytes = entry->processed_bytes_counter / entry->hit_counter;
+                        f64 average_bytes = ((f64)entry->processed_bytes_counter / (f64)entry->hit_counter);
                         PrintProfilingBandwidth(average_bytes, average_inclusive, cpu_frequency);
                     }
 
