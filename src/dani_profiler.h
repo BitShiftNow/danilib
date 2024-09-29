@@ -4,7 +4,7 @@
 // Author: Dani Drywa (dani@drywa.me)
 // This library is based on what I learned from Casey Muratori's excellent performance aware programming course at https://www.computerenhance.com/ and some other resources about benchmarking.
 //
-// Last change: 2024/09/27 (yyyy/mm/dd)
+// Last change: 2024/09/29 (yyyy/mm/dd)
 //
 // License: See end of file
 //
@@ -343,6 +343,14 @@ static void PrintProfilingTimes(u64 elapsed_ticks, u64 cpu_frequency) {
             }
         } else {
             DANI_PROFILER_PRINTF("%0.4fs (%0.4fms)", seconds, milliseconds);
+        }
+    } else if (seconds >= 60.0) {
+        f64 minutes = (seconds / 60.0);
+        if (minutes >= 60.0) {
+            f64 hours = (minutes / 60.0);
+            DANI_PROFILER_PRINTF("%0.4fh", hours);
+        } else {
+            DANI_PROFILER_PRINTF("%0.4fmin", minutes);
         }
     } else {
         DANI_PROFILER_PRINTF("%0.4fs", seconds);
