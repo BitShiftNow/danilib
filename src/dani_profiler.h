@@ -4,7 +4,7 @@
 // Author: Dani Drywa (dani@drywa.me)
 // This library is based on what I learned from Casey Muratori's excellent performance aware programming course at https://www.computerenhance.com/ and some other resources about benchmarking.
 //
-// Last change: 2024/09/29 (yyyy/mm/dd)
+// Last change: 2024/10/05 (yyyy/mm/dd)
 //
 // License: See end of file
 //
@@ -40,23 +40,32 @@
 // // Add your code you want to profile here
 // dani_EndProfilingZone(my_zone);
 //
+// If the profiling zone will be called multiple times it is best to use a local static variable for the zone index:
+//
+// static u32 local_index = 0;
+// if (local_index == 0) {
+//     local_index = dani_GetNextProfilerZoneIndex();
+// }
+// // Start a zone like usual...
+//
 // This pattern can be simplified by using the dani_Profile macro.
 //
-// dani_Profile("Zone Name", {
-//      // Add your code you want to profile here 
-// });
+// dani_Profile(var_name, "Zone Name");
+// // Add your code you want to profile here
+// dani_ProfileEnd(var_name);
 //
-// If you want to profile a whole function block consider the dani_ProfileFunction macro which uses __func__ as the name.
+// The var_name in the macro will be used to create variables for the index and the zone.
+// If you want to profile a whole function, consider the dani_ProfileFunction macro which uses __func__ as the zone name.
 //
 // void MyFunc(void) {
-//      dani_ProfileFunction({
-//          // Add your function code to profile here
-//      });
+//      dani_ProfileFunction();
+//      // Add your function code to profile here
+//      dani_ProfileFunctionEnd();
 // }
 //
-// If the function returns the declaration of the return value and the return statement should not be in the dani_ProfileFunction block.
+// dani_ProfileFunctionEnd should always be called before any return statements.
 //
-// The last argument of dani_BeginProfilingZone is the number of bytes that are about to be processed by the profiling zone. This can remain 0 if you don't with to track the bandwidth. To profile with the bandwidth included you have to provide the byte count. You can use the dani_ProfileBandwidth and dani_ProfileFunctionBandwidth macros in the same way you would use the dani_Profile and dani_ProfileFunction macros. The only difference is that it takes in a byte count argument as well.
+// The last argument of dani_BeginProfilingZone is the number of bytes that are about to be processed by the profiling zone. This can remain 0 if you don't want to track the bandwidth. To profile with the bandwidth included you have to provide the byte count. You can use the dani_ProfileBandwidth and dani_ProfileFunctionBandwidth macros in the same way you would use the dani_Profile and dani_ProfileFunction macros. The only difference is that it takes in a byte count argument as well.
 //
 #ifndef __DANI_LIB_PROFILER_H
 #define __DANI_LIB_PROFILER_H
@@ -155,25 +164,19 @@ __DANI_PROFILER_DEC u32 dani_GetNextProfilerZoneIndex(void);
 __DANI_PROFILER_DEC dani_profiler_zone dani_BeginProfilingZone(const s8 *name, u32 index, u64 byte_count);
 __DANI_PROFILER_DEC void dani_EndProfilingZone(dani_profiler_zone zone);
 
-#define dani_Profile(zone_name, profile_block) Statement({\
-    static u32 __entry_index = 0;\
-    if (__entry_index == 0) {\
-        __entry_index = dani_GetNextProfilerZoneIndex();\
+#define dani_ProfileBandwidth(var_name, zone_name, byte_count) \
+    static u32 __dani_profile_##var_name##_index = 0;\
+    if (__dani_profile_##var_name##_index == 0) {\
+        __dani_profile_##var_name##_index = dani_GetNextProfilerZoneIndex();\
     }\
-    dani_profiler_zone __profile_zone = dani_BeginProfilingZone((zone_name), __entry_index, 0);\
-    profile_block\
-    dani_EndProfilingZone(__profile_zone);\
-    })
+    dani_profiler_zone __dani_profile_##var_name##_zone = dani_BeginProfilingZone((zone_name), __dani_profile_##var_name##_index, (byte_count))
 
-#define dani_ProfileBandwidth(zone_name, byte_count, profile_block) Statement({\
-    static u32 __entry_index = 0;\
-    if (__entry_index == 0) {\
-        __entry_index = dani_GetNextProfilerZoneIndex();\
-    }\
-    dani_profiler_zone __profile_zone = dani_BeginProfilingZone((zone_name), __entry_index, (byte_count));\
-    profile_block\
-    dani_EndProfilingZone(__profile_zone);\
-    })
+#define dani_Profile(var_name, zone_name) dani_ProfileBandwidth(var_name, zone_name, 0)
+#define dani_ProfileEnd(var_name) dani_EndProfilingZone(__dani_profile_##var_name##_zone)
+
+#define dani_ProfileFunction() dani_Profile(function, __func__)
+#define dani_ProfileFunctionBandwidth(byte_count) dani_ProfileBandwidth(function, __func__, byte_count)
+#define dani_ProfileFunctionEnd() dani_ProfileEnd(function)
 
 #else // NOT DANI_PROFILER_ENABLED
 
@@ -197,22 +200,15 @@ __DANI_PROFILER_DEC void dani_PrintProfilingResults(void);
 #define dani_BeginProfilingZone(...) 0
 #define dani_EndProfilingZone(...)
 
-#define dani_Profile(zone_name, profile_block) Statement({\
-    Unused(zone_name);\
-    profile_block\
-    })
+#define dani_ProfileBandwidth(...)
+#define dani_Profile(...)
+#define dani_ProfileEnd(...)
 
-#define dani_ProfileBandwidth(zone_name, byte_count, profile_block) Statement({\
-    Unused(zone_name);\
-    Unused(byte_count);\
-    profile_block\
-    })
+#define dani_ProfileFunction()
+#define dani_ProfileFunctionBandwidth(...)
+#define dani_ProfileFunctionEnd()
 
 #endif // DANI_PROFILER_ENABLED
-
-#define dani_ProfileFunction(profile_block) dani_Profile(__func__, profile_block)
-#define dani_ProfileFunctionBandwidth(byte_count, profile_block) dani_ProfileBandwidth(__func__, byte_count, profile_block)
-
 #endif // __DANI_LIB_PROFILER_H
 
 #ifdef DANI_LIB_PROFILER_IMPLEMENTATION
